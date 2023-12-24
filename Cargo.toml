@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-walkdir = "2.3"
-chrono = "0.4"
-clap = "4.4.11"
+clap = "4.0"
 indicatif = "0.17.0"
+walkdir = "2.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9.29"
+log = "0.4"
+env_logger = "0.10.1"
+filetime = "0.2"
