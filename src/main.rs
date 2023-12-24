@@ -133,8 +133,9 @@ fn compress_folder(
 ) -> Result<(), Box<dyn Error>> {
     let msg = format!("Compressing: {}", source_folder.to_string_lossy());
     println!("{}", msg); // Print the message above the progress bar
+    let original_folder = source_folder.join("original");
     let status = SystemCommand::new("7z")
-        .current_dir(source_folder)
+        .current_dir(original_folder)
         .args(&["a", target_file, "."])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
