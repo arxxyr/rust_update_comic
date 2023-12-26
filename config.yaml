@@ -1,3 +1,4 @@
-source: "E:/test/commies"
-target: "C:/test"
+source: "E:/bika/commies"
+target: "C:/dev/test"
 shutdown: false
+delay: 500

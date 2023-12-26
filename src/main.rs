@@ -15,6 +15,7 @@ struct Config {
     source: String,
     target: String,
     shutdown: bool,
+    delay: Option<u64>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -63,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     pb.finish_with_message("All folders compressed");
 
     if shutdown {
-        shutdown_system();
+        shutdown_system(config.delay);
     }
 
     Ok(())
@@ -126,11 +127,7 @@ fn latest_modification_time(path: &Path) -> Result<SystemTime, Box<dyn Error>> {
     latest.ok_or_else(|| "No files found in the directory".into())
 }
 
-fn compress_folder(
-    source_folder: &Path,
-    target_file: &str,
-    // pb: &ProgressBar,
-) -> Result<(), Box<dyn Error>> {
+fn compress_folder(source_folder: &Path, target_file: &str) -> Result<(), Box<dyn Error>> {
     let msg = format!("Compressing: {}", source_folder.to_string_lossy());
     println!("{}", msg); // Print the message above the progress bar
     let original_folder = source_folder.join("original");
@@ -159,16 +156,17 @@ fn compress_folder(
     Ok(())
 }
 
-fn shutdown_system() {
-    info!("Shutting down the system...");
+fn shutdown_system(delay_time: Option<u64>) {
+    let delay = delay_time.unwrap_or(300); // 默认延迟 300 秒
+    println!("Shutting down the system in {} seconds...", delay);
     #[cfg(target_os = "windows")]
     SystemCommand::new("shutdown")
-        .args(&["/s", "/f", "/t", "300"])
+        .args(&["/s", "/f", &format!("/t {}", delay)])
         .output()
         .expect("Failed to execute shutdown command");
     #[cfg(not(target_os = "windows"))]
     SystemCommand::new("shutdown")
-        .args(&["-h", "now"])
+        .args(&["-h", &format!("+{}", delay / 60)]) // Linux 中以分钟为单位
         .output()
         .expect("Failed to execute shutdown command");
 }
