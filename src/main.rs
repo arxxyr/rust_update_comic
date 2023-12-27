@@ -2,13 +2,17 @@ use clap::{Arg, Command};
 use filetime::FileTime;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{error, info};
+use notify_rust::Notification;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 use std::process::{Command as SystemCommand, Stdio};
 use std::time::SystemTime;
+use tokio::time::{sleep, Duration};
 use walkdir::WalkDir;
+
+mod shutdown;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
@@ -18,7 +22,8 @@ struct Config {
     delay: Option<u64>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     let matches = Command::new("Folder Compression Tool")
@@ -45,27 +50,51 @@ fn main() -> Result<(), Box<dyn Error>> {
     let shutdown = config.shutdown;
 
     let total_folders = count_folders(source_path)?;
-    let pb = create_progress_bar(total_folders);
-
+    // let pb = create_progress_bar(total_folders);
+    let mut index: u64 = 0;
     for entry in WalkDir::new(source_path).min_depth(1).max_depth(1) {
         let entry = entry?;
+        println!(
+            "Start compressing {}/{} : {}",
+            index,
+            total_folders,
+            entry.path().display()
+        );
         if entry.file_type().is_dir() {
             let folder_path = entry.path();
             let folder_name = entry.file_name().to_str().unwrap();
             let target_file = format!("{}/{}.cbz", target_path.display(), folder_name);
 
             if should_compress(folder_path, &target_file)? {
+                // let msg = format!(
+                //     "Compressing {}/{} : {}",
+                //     index,
+                //     total_folders,
+                //     folder_path.to_string_lossy()
+                // );
+                // println!("{}", msg); // Print the message above the progress bar
                 let _ = compress_folder(folder_path, &target_file)?;
             }
         }
-        pb.inc(1);
+        // pb.inc(1);
+        index += 1;
     }
 
-    pb.finish_with_message("All folders compressed");
+    // pb.finish_with_message("All folders compressed");
 
     if shutdown {
-        shutdown_system(config.delay);
+        shutdown::shutdown(config.delay).await?;
     }
+
+    Notification::new()
+        .summary("bika 压缩完毕")
+        .body("已经压缩完毕")
+        .icon("firefox")
+        .show()?;
+
+    // 在返回前暂停一段时间
+    println!("Pausing before exiting...");
+    sleep(Duration::from_secs(5)).await; // 异步暂停3秒
 
     Ok(())
 }
@@ -86,6 +115,7 @@ fn count_folders(path: &Path) -> Result<u64, Box<dyn Error>> {
         .count() as u64)
 }
 
+#[allow(dead_code)]
 fn create_progress_bar(length: u64) -> ProgressBar {
     let pb = ProgressBar::new(length);
     pb.set_style(
@@ -128,8 +158,6 @@ fn latest_modification_time(path: &Path) -> Result<SystemTime, Box<dyn Error>> {
 }
 
 fn compress_folder(source_folder: &Path, target_file: &str) -> Result<(), Box<dyn Error>> {
-    let msg = format!("Compressing: {}", source_folder.to_string_lossy());
-    println!("{}", msg); // Print the message above the progress bar
     let original_folder = source_folder.join("original");
     let status = SystemCommand::new("7z")
         .current_dir(original_folder)
@@ -154,19 +182,4 @@ fn compress_folder(source_folder: &Path, target_file: &str) -> Result<(), Box<dy
     }
 
     Ok(())
-}
-
-fn shutdown_system(delay_time: Option<u64>) {
-    let delay = delay_time.unwrap_or(300); // 默认延迟 300 秒
-    println!("Shutting down the system in {} seconds...", delay);
-    #[cfg(target_os = "windows")]
-    SystemCommand::new("shutdown")
-        .args(&["/s", "/f", &format!("/t {}", delay)])
-        .output()
-        .expect("Failed to execute shutdown command");
-    #[cfg(not(target_os = "windows"))]
-    SystemCommand::new("shutdown")
-        .args(&["-h", &format!("+{}", delay / 60)]) // Linux 中以分钟为单位
-        .output()
-        .expect("Failed to execute shutdown command");
 }

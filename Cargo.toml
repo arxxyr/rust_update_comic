@@ -13,3 +13,6 @@ serde_yaml = "0.9.29"
 log = "0.4"
 env_logger = "0.10.1"
 filetime = "0.2"
+system_shutdown = "4.0.1"
+tokio = { version = "1", features = ["full"] }
+notify-rust = "4"
