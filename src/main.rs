@@ -51,10 +51,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let total_folders = count_folders(source_path)?;
     // let pb = create_progress_bar(total_folders);
-    let mut index: u64 = 0;
-    for entry in WalkDir::new(source_path).min_depth(1).max_depth(1) {
+
+    for (index, entry) in (0_u64..).zip(WalkDir::new(source_path).min_depth(1).max_depth(1)) {
         let entry = entry?;
-        println!(
+        print!(
             "Start compressing {}/{} : {}",
             index,
             total_folders,
@@ -62,39 +62,44 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
         if entry.file_type().is_dir() {
             let folder_path = entry.path();
-            let folder_name = entry.file_name().to_str().unwrap();
-            let target_file = format!("{}/{}.cbz", target_path.display(), folder_name);
+            let folder_name = entry
+                .file_name()
+                .to_str()
+                .ok_or("Failed to convert path to string")?;
+            // let target_file = format!("{}/{}.cbz", target_path.display(), folder_name);
+            // let target_file = target_path.join(format!("{}.cbz", folder_name));
+            let target_file_pathbuf = target_path.join(folder_name).with_extension("cbz");
 
-            if should_compress(folder_path, &target_file)? {
-                // let msg = format!(
-                //     "Compressing {}/{} : {}",
-                //     index,
-                //     total_folders,
-                //     folder_path.to_string_lossy()
-                // );
-                // println!("{}", msg); // Print the message above the progress bar
-                let _ = compress_folder(folder_path, &target_file)?;
+            // 将 PathBuf 转换为 &str
+            let target_file_str = target_file_pathbuf
+                .to_str()
+                .ok_or("Failed to convert path to string")?;
+
+            if should_compress(folder_path, target_file_str)? {
+                compress_folder(folder_path, target_file_str)?;
+                println!("    ...done");
+            } else {
+                println!("    ...skipped");
             }
         }
         // pb.inc(1);
-        index += 1;
     }
 
     // pb.finish_with_message("All folders compressed");
 
     if shutdown {
         shutdown::shutdown(config.delay).await?;
+    } else {
+        Notification::new()
+            .summary("bika 压缩完毕")
+            .body("已经压缩完毕")
+            .icon("firefox")
+            .show()?;
+
+        // 在返回前暂停一段时间
+        println!("Pausing before exiting...");
+        sleep(Duration::from_secs(5)).await; // 异步暂停3秒
     }
-
-    Notification::new()
-        .summary("bika 压缩完毕")
-        .body("已经压缩完毕")
-        .icon("firefox")
-        .show()?;
-
-    // 在返回前暂停一段时间
-    println!("Pausing before exiting...");
-    sleep(Duration::from_secs(5)).await; // 异步暂停3秒
 
     Ok(())
 }
@@ -161,7 +166,7 @@ fn compress_folder(source_folder: &Path, target_file: &str) -> Result<(), Box<dy
     let original_folder = source_folder.join("original");
     let status = SystemCommand::new("7z")
         .current_dir(original_folder)
-        .args(&["a", target_file, "."])
+        .args(["a", target_file, "."])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()?;
