@@ -54,13 +54,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     for (index, entry) in (0_u64..).zip(WalkDir::new(source_path).min_depth(1).max_depth(1)) {
         let entry = entry?;
-        print!(
-            "Start compressing {}/{} : {}",
-            index,
-            total_folders,
-            entry.path().display()
-        );
         if entry.file_type().is_dir() {
+            print!(
+                "Start compressing {}/{} : {}",
+                index,
+                total_folders,
+                entry.path().display()
+            );
             let folder_path = entry.path();
             let folder_name = entry
                 .file_name()
@@ -176,7 +176,7 @@ fn compress_folder(source_folder: &Path, target_file: &str) -> Result<(), Box<dy
     // 将 PathBuf 转换为 &str
     let temp_file_str = temp_path
         .to_str()
-        .ok_or("Failed to convert path to string")?;
+        .expect("Failed to convert path to string");
     let original_folder = source_folder.join("original");
 
     let status = SystemCommand::new("7z")
@@ -190,17 +190,15 @@ fn compress_folder(source_folder: &Path, target_file: &str) -> Result<(), Box<dy
         // 尝试移动临时文件到目标位置，如果失败则使用复制和删除
         if fs::rename(&temp_path, target_file).is_err() {
             println!("\nMoving file failed, using copy and delete instead");
-            let result = fs::copy(&temp_path, target_file);
-            match result {
-                Ok(_) => {
-                    println!("Copy successful");
-                    let remove_result = fs::remove_file(&temp_path);
-                    match remove_result {
-                        Ok(_) => println!("Remove original file successful"),
-                        Err(e) => println!("Remove original file failed with error: {}", e),
-                    }
+            if let Err(e) = fs::copy(&temp_path, target_file) {
+                println!("Copy failed with error: {}", e);
+            } else {
+                println!("Copy successful");
+                if let Err(e) = fs::remove_file(&temp_path) {
+                    println!("Remove temp file failed with error: {}", e);
+                } else {
+                    println!("Remove temp file successful");
                 }
-                Err(e) => println!("Copy failed with error: {}", e),
             }
         }
 
