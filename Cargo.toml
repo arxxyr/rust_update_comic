@@ -16,3 +16,4 @@ filetime = "0.2"
 system_shutdown = "4.0.1"
 tokio = { version = "1", features = ["full"] }
 notify-rust = "4"
+tempfile = "3.2.0"

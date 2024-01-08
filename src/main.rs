@@ -81,6 +81,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             } else {
                 println!("    ...skipped");
             }
+            // 暂停200毫秒
+            std::thread::sleep(std::time::Duration::from_millis(200));
         }
         // pb.inc(1);
     }
@@ -163,15 +165,46 @@ fn latest_modification_time(path: &Path) -> Result<SystemTime, Box<dyn Error>> {
 }
 
 fn compress_folder(source_folder: &Path, target_file: &str) -> Result<(), Box<dyn Error>> {
+    // 获取系统临时文件夹路径
+    let temp_dir = std::env::temp_dir();
+    let temp_path: std::path::PathBuf = tempfile::Builder::new()
+        .suffix(".cbz")
+        .tempfile_in(temp_dir)?
+        .into_temp_path()
+        .to_path_buf();
+
+    // 将 PathBuf 转换为 &str
+    let temp_file_str = temp_path
+        .to_str()
+        .ok_or("Failed to convert path to string")?;
     let original_folder = source_folder.join("original");
+
     let status = SystemCommand::new("7z")
         .current_dir(original_folder)
-        .args(["a", target_file, "."])
+        .args(["a", "-tzip", &temp_file_str, "."])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()?;
 
     if status.success() {
+        // 尝试移动临时文件到目标位置，如果失败则使用复制和删除
+        if fs::rename(&temp_path, target_file).is_err() {
+            println!("\nMoving file failed, using copy and delete instead");
+            let result = fs::copy(&temp_path, target_file);
+            match result {
+                Ok(_) => {
+                    println!("Copy successful");
+                    let remove_result = fs::remove_file(&temp_path);
+                    match remove_result {
+                        Ok(_) => println!("Remove original file successful"),
+                        Err(e) => println!("Remove original file failed with error: {}", e),
+                    }
+                }
+                Err(e) => println!("Copy failed with error: {}", e),
+            }
+        }
+
+        // 更新压缩文件的修改时间
         if let Ok(latest_modification) = latest_modification_time(source_folder) {
             let file_time = FileTime::from_system_time(latest_modification);
             filetime::set_file_mtime(target_file, file_time)
